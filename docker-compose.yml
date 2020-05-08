@@ -1,0 +1,64 @@
+version: "3.7"
+
+services:
+
+  manager:
+    build: 
+      context: ./manager
+      args:
+        - BUILD_ID=development
+    image: ${MANAGER_IMAGE}
+    networks:
+      - local_default
+    ports:
+      - 80:80
+    environment:
+      MONGO_USER: ${MONGO_USER}
+      MONGO_PASSWORD: ${MONGO_PASSWORD}
+      ENVIRONMENT: ${environment}
+      TEAM_NAME: ${TEAM_NAME}
+      MLMODEL_ENDPOINT_DOMAIN_FORMAT: "{model_name}_localhost"
+    depends_on:
+      - mongo
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./manager:/app
+    entrypoint: [ "/start-reload.sh" ]
+
+  mongo:
+    image: "mongo:4"
+    networks:
+      - local_default
+    volumes:
+      - ./mongo/data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+
+  mongo-express:
+    image: mongo-express
+    networks:
+      - local_default
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_USER}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_PASSWORD}
+    depends_on:
+      - mongo
+
+  test_container:
+    build: ./test_container
+    networks:
+      - local_default
+    volumes:
+      - ./test_container:/app
+    environment:
+      ENVIRONMENT: test
+    depends_on:
+      - mongo
+      - manager
+    entrypoint: ["tail", "-f", "/dev/null"]
+
+networks:
+  local_default:

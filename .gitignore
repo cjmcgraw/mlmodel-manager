@@ -1,0 +1,17 @@
+.classpath
+.project
+.settings/
+*.idea/
+*.iml
+.vscode/
+target/
+clover/
+localrw/
+.DS_Store
+*.swp
+
+**/__pycache__/**
+**/venv/**
+mongo/data
+1
+docker-compose-test.yml
