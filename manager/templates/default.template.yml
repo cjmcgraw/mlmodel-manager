@@ -35,10 +35,6 @@ services:
         - com.df.distribute=true
         - com.df.serviceDomain={{ domain }}
         - com.df.port={{ port }}
-      placement:
-        constraints:
-          - node.labels.type!=loggedinrec
-          - node.labels.type!=loggedoutrec
       update_config: 
         delay: "10s"
         parallelism: 3
