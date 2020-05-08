@@ -3,7 +3,7 @@ This project is a webservice that manages machine learning models being served t
 production.
 
 The purpose of this project is relatively simple. I needed the ability to dynamically 
-serve production read machine learning docker containers to an environment where they 
+serve production ready machine learning docker containers to an environment where they 
 could be communicated with, at scale, with the external world. The implementation of 
 doing this is actually quite complicated though. It relies heavily on the underlying 
 technology that you are using. Because of this, this project exists as an abstraction 
