@@ -1,4 +1,7 @@
 FROM tiangolo/uvicorn-gunicorn-fastapi:python3.7
+
+MAINTAINER carlm@accretivetg.com
+
 ARG BUILD_ID
 RUN apt-get update -y
 RUN apt-get install -y \
