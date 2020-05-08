@@ -18,9 +18,12 @@ import sys
 import os
 import re
 
+import swarm
+
 log.basicConfig(level=log.DEBUG, stream=sys.stdout)
 
 
+print(os.environ)
 ENVIRONMENT_NAME = os.environ["ENVIRONMENT"]
 TEAM_NAME = os.environ["TEAM_NAME"]
 
@@ -179,12 +182,12 @@ class DeploymentRecord(BaseModel):
             data.setdefault("model_type", "")
             if data:
                 deployment = DeploymentRecord(**data)
-                deployment.containers = get_container_status(
-                    name, deployment_id=deployment.deployment_id
+                deployment.containers = swarm.get_container_status(
+                    TEAM_NAME, name, deployment_id=deployment.deployment_id
                 )
 
-                deployment.swarm_services = get_active_models(
-                    deployment_id=deployment.deployment_id
+                deployment.swarm_services = swarm.get_active_models(
+                    TEAM_NAME, deployment_id=deployment.deployment_id
                 )
                 deployments.append(deployment)
         return deployments
@@ -213,7 +216,9 @@ class DeploymentRecord(BaseModel):
 
 @app.get("/")
 def get_all_models(live_only: bool = False, verbose: bool = False):
-    all_live_models = set(service["name"] for service in get_active_models())
+    all_live_models = set(
+        service["name"] for service in swarm.get_active_models(TEAM_NAME)
+    )
     all_valid_deployments = set(DeploymentRecord.get_all_valid_deployment_names())
     all_names = all_valid_deployments | all_live_models
 
@@ -252,7 +257,7 @@ def delete_model(model: str, clear_all_records: bool = False):
     deployments = list(DeploymentRecord.get_last_n(model, 1))
 
     try:
-        stop_model(model)
+        swarm.stop_model(model)
     except HTTPException as err:
         log.exception(err)
         ...
@@ -284,98 +289,12 @@ def add_model(model: str, deployment: DeploymentRecord):
         **dict(deployment.extra_template_attributes),
     )
     log.info(f"rendered template:\n{rendered_template}")
-    cmd = f"docker stack deploy --with-registry-auth --resolve-image changed -c - {deployment.name}"
 
     deployment.rendered_template = rendered_template
     deployment.save()
-    result = _run_cmd(cmd, check=True, input=rendered_template)
+
+    swarm.deploy_model(deployment.rendered_template, deployment.name)
+
     deployment.containers = []
     deployment.swarm_services = []
     return deployment
-
-
-def stop_model(model: str):
-    cmd = f"docker stack rm {model}"
-
-    result = None
-    try:
-        result = _run_cmd(cmd, check=True)
-    except:
-        log.critical(f"Failed to stop model for unknown reason:\n{result}")
-        raise HTTPException(status_code=400, detail="unknown mlmodel given!")
-
-
-def _run_cmd(cmd, **kwargs):
-    check = kwargs.get("check", False)
-    kwargs["check"] = False
-    kwargs.setdefault("capture_output", True)
-    kwargs.setdefault("encoding", "utf-8")
-    if isinstance(cmd, str):
-        cmd = cmd.split(" ")
-    log.info(f"running command:\n{cmd}")
-    result = subprocess.run(cmd, **kwargs)
-    log.info(
-        f"""
-        finished command:
-        {cmd}
-        
-        stdout:
-        {result.stdout}
-
-        stderr:
-        {result.stderr}
-        """
-    )
-
-    if check and result.returncode != 0:
-        raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout)
-    return result
-
-
-def get_container_status(model_name, deployment_id=None):
-    cmd = [
-        "docker",
-        "service",
-        "ps",
-        shlex.quote(f"{model_name}_mlmodel"),
-        "--no-trunc",
-        "--format",
-        "{{.Name}}__{{.Node}}__{{.Image}}__{{.DesiredState}}__{{.CurrentState}}__{{.Error}}",
-    ]
-
-    if deployment_id:
-        cmd += ["--filter", f"label=team.{TEAM_NAME}.deployment.id={deployment_id}"]
-
-    cmd_stdout = _run_cmd(cmd).stdout
-    key_names = ["name", "node", "image", "desired_state", "current_state", "error"]
-
-    def process_into_dict(line):
-        return dict(i.zip_longest(key_names, line.split("__")))
-
-    return [process_into_dict(d) for d in cmd_stdout.strip().split("\n") if d.strip()]
-
-
-def get_active_models(deployment_id=None):
-    cmd = [
-        "docker",
-        "service",
-        "ls",
-        "--filter",
-        f"label=team.{TEAM_NAME}.type=mlmodel",
-        "--format",
-        "{{.Name}},{{.Image}},{{.Replicas}}",
-    ]
-
-    if deployment_id:
-        cmd += ["--filter", f"label=team.{TEAM_NAME}.deployment.id={deployment_id}"]
-
-    key_names = ["name", "image", "replicas"]
-    cmd_stdout = _run_cmd(cmd).stdout
-
-    def process_into_dict(line):
-        weird_formatted_name, *data = line.split(",")
-        _, *keys = key_names
-        name = re.sub("_mlmodel$", "", weird_formatted_name.split(".")[0])
-        return dict(i.zip_longest(keys, data), name=name)
-
-    return [process_into_dict(l) for l in cmd_stdout.strip().split("\n") if l.strip()]

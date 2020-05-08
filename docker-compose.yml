@@ -7,16 +7,15 @@ services:
       context: ./manager
       args:
         - BUILD_ID=development
-    image: ${MANAGER_IMAGE}
     networks:
       - local_default
     ports:
       - 80:80
     environment:
-      MONGO_USER: ${MONGO_USER}
-      MONGO_PASSWORD: ${MONGO_PASSWORD}
-      ENVIRONMENT: ${environment}
-      TEAM_NAME: ${TEAM_NAME}
+      MONGO_USER: "development"
+      MONGO_PASSWORD: "development"
+      ENVIRONMENT: "development"
+      TEAM_NAME: "development"
       MLMODEL_ENDPOINT_DOMAIN_FORMAT: "{model_name}_localhost"
     depends_on:
       - mongo
@@ -32,8 +31,8 @@ services:
     volumes:
       - ./mongo/data:/data/db
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_ROOT_USERNAME: "development"
+      MONGO_INITDB_ROOT_PASSWORD: "development"
 
   test_container:
     build: ./test_container
