@@ -30,7 +30,7 @@ TEAM_NAME = os.environ["TEAM_NAME"]
 MONGO_USER = os.environ["MONGO_USER"]
 MONGO_PASSWORD = os.environ["MONGO_PASSWORD"]
 
-MANAGER_BUILD_ID = os.environ["MANAGER_BUILD_ID"]
+MANAGER_BUILD_ID = os.environ["BUILD_ID"]
 MLMODEL_ENDPOINT_DOMAIN_FORMAT = os.environ["MLMODEL_ENDPOINT_DOMAIN_FORMAT"]
 
 process_id = uuid().hex

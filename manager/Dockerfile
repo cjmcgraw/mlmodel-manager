@@ -28,4 +28,4 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=2 CMD curl --fail localhost:80/health/test
 ENV APP_MODULE server:app
 ENV ENVIRONMENT development
-ENV MANAGER_BUILD_ID $BUILD_ID
+ENV BUILD_ID $BUILD_ID
