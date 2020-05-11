@@ -8,38 +8,39 @@ import os
 
 
 def deploy_model(rendered_template, name):
-    cmd = (
-        f"docker stack deploy --with-registry-auth --resolve-image changed -c - {name}"
+    _run_cmd(
+        [
+            "docker",
+            "stack",
+            "deploy",
+            "--with-registry-auth",
+            "--resolve-image",
+            "changed",
+            "-c",
+            "-",
+            name,
+        ],
+        check=True,
+        input=rendered_template,
     )
-    result = _run_cmd(cmd, check=True, input=rendered_template)
 
 
 def stop_model(model: str):
-    cmd = f"docker stack rm {model}"
-
-    result = None
-    try:
-        result = _run_cmd(cmd, check=True)
-    except:
-        log.critical(f"Failed to stop model for unknown reason:\n{result}")
-        raise HTTPException(status_code=400, detail="unknown mlmodel given!")
+    _run_cmd(["docker", "stack", "rm", model], check=False)
 
 
 def _run_cmd(cmd, **kwargs):
     check = kwargs.get("check", False)
-    kwargs["check"] = False
     kwargs.setdefault("capture_output", True)
     kwargs.setdefault("encoding", "utf-8")
-    if isinstance(cmd, str):
-        cmd = cmd.split(" ")
-
-    quoted_cmd = [shlex.quote(command) for command in cmd]
-    log.info(f"running command:\n{quoted_cmd}")
-    result = subprocess.run(quoted_cmd, **kwargs)
+    kwargs["check"] = False
+    kwargs["shell"] = False
+    log.info(f"running command:\n{cmd}")
+    result = subprocess.run(cmd, **kwargs)
     log.info(
         f"""
         finished command:
-        {quoted_cmd}
+        {cmd}
         
         stdout:
         {result.stdout}
