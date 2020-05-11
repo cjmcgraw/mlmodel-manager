@@ -22,10 +22,11 @@ COPY ./requirements.txt /app/requirements.txt
 RUN pip3 install -r /app/requirements.txt
 
 COPY ./server.py /app/server.py
+COPY ./swarm.py /app/swarm.py
 COPY ./templates /app/templates
 
 EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=2 CMD curl --fail localhost:80/health/test
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=2 CMD curl --fail localhost:80/health/test
 ENV APP_MODULE server:app
 ENV ENVIRONMENT development
 ENV BUILD_ID $BUILD_ID
