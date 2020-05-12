@@ -13,6 +13,7 @@ def deploy_model(rendered_template, name):
             "docker",
             "stack",
             "deploy",
+            "--prune",
             "--with-registry-auth",
             "--resolve-image",
             "changed",
