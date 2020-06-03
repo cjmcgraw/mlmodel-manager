@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 from uuid import uuid4 as uuid
-from typing import List, Dict
+from typing import List, Dict, Union
 import collections
 import subprocess
 import logging as log
@@ -11,6 +11,7 @@ import pymongo
 import docker as docker_lib
 import itertools as i
 import string as s
+import yaml
 import shlex
 import json
 import time
@@ -29,6 +30,9 @@ TEAM_NAME = os.environ["TEAM_NAME"]
 
 MONGO_USER = os.environ["MONGO_USER"]
 MONGO_PASSWORD = os.environ["MONGO_PASSWORD"]
+CUSTOM_TEMPLATE_DIRECTORY = os.environ.get(
+    "CUSTOM_TEMPLATE_DIRECTORY", "/app/templates"
+)
 
 MANAGER_BUILD_ID = os.environ["BUILD_ID"]
 MLMODEL_ENDPOINT_DOMAIN_FORMAT = os.environ["MLMODEL_ENDPOINT_DOMAIN_FORMAT"]
@@ -165,7 +169,7 @@ class DeploymentRecord(BaseModel):
     run_id: str
     image: str
     extra_template_attributes: Dict = {}
-    rendered_template: str = None
+    rendered_template: Union[str, dict] = None
     swarm_services: List = None
     containers: List = None
 
@@ -180,6 +184,8 @@ class DeploymentRecord(BaseModel):
 
         for data in all_deployments_by_time:
             data.setdefault("model_type", "")
+            if isinstance(data["rendered_template"], str):
+                data["rendered_template"] = yaml.load(data["rendered_template"])
             if data:
                 deployment = DeploymentRecord(**data)
                 deployment.containers = swarm.get_container_status(
@@ -275,8 +281,12 @@ def add_model(model: str, deployment: DeploymentRecord):
     deployment.domain = MLMODEL_ENDPOINT_DOMAIN_FORMAT.format(model_name=model)
     deployment.template_file = f"{deployment.model_type}.template.yml"
 
-    template_file = deployment.template_file.split("/")[-1]
-    with open(f"/app/templates/{template_file}") as f:
+    template_path = f"{CUSTOM_TEMPLATE_DIRECTORY}/{deployment.template_file}"
+    if not os.path.isfile(template_path):
+        template_path = f"/app/templates/{deployment.template_file}"
+
+    log.info(f"attempting to open template at {template_path}")
+    with open(template_path, "r") as f:
         template = jinja2.Template(f.read())
 
     deployment.deployment_id = uuid().hex
@@ -290,10 +300,10 @@ def add_model(model: str, deployment: DeploymentRecord):
     )
     log.info(f"rendered template:\n{rendered_template}")
 
-    deployment.rendered_template = rendered_template
+    deployment.rendered_template = yaml.load(rendered_template)
     deployment.save()
 
-    swarm.deploy_model(deployment.rendered_template, deployment.name)
+    swarm.deploy_model(rendered_template, deployment.name)
 
     deployment.containers = []
     deployment.swarm_services = []
