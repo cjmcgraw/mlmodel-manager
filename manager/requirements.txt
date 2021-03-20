@@ -3,7 +3,7 @@ chardet==3.0.4
 docker==4.2.1
 fastapi==0.55.1
 idna==2.9
-Jinja2==2.11.2
+Jinja2==2.11.3
 MarkupSafe==1.1.1
 pydantic==1.5.1
 pymongo==3.10.1
