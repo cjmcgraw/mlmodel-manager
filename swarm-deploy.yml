@@ -1,0 +1,210 @@
+version: "3.8"
+
+services:
+
+  master:
+    image: ${VAR_masterImage}
+    networks:
+      - default
+      - proxy
+    volumes:
+      - type: bind
+        source: ${VAR_credsLocationOnHost}
+        target: /google_cloud_credentials
+    environment:
+      HTTP_WORKERS: 10
+      HTTP_PORT: 8000
+      ENVIRONMENT: ${VAR_environment}
+      GOOGLE_CLOUD_PROJECT: ${VAR_googleCloudProject}
+      GOOGLE_APPLICATION_CREDENTIALS: "/google_cloud_credentials/${VAR_serviceAccountFile}"
+      REMOTE_MODEL_DIRECTORY: "${VAR_remoteModelDirectory}"
+    deploy:
+      labels:
+        - com.df.notify=true
+        - com.df.distribute=true
+        - com.df.serviceDomain=${VAR_masterDomain}
+        - com.df.port=8000
+        - maintainer.team=${VAR_teamName}
+      replicas: 1
+      resources:
+        limits:
+          cpus: "5"
+          memory: "2G"
+        reservations:
+          cpus: "3"
+          memory: "500M"
+      restart_policy:
+        condition: "any"
+        delay: "5s"
+        window: "5m"
+      rollback_config:
+        parallelism: 1
+        delay: "5s"
+        monitor: "5m"
+      update_config:
+        parallelism: 1
+        delay: "5s"
+        monitor: "5m"
+      placement:
+        constraints:
+          - node.role == manager
+          - node.labels.type!=loggedoutrec
+          - node.labels.type!=loggedinrec
+
+  remote_model_puller:
+    image: ${VAR_remoteModelPullerImage}
+    networks:
+      - hostnet
+    volumes:
+      - type: bind
+        source: ${VAR_credsLocationOnHost}
+        target: /google_cloud_credentials
+      - type: bind
+        source: ${VAR_hostDataDirectory}
+        target: /data/
+    environment:
+      HTTP_PORT: 8001
+      HTTP_WORKERS: 3
+      ENVIRONMENT: ${VAR_environment}
+      MASTER_URL: "https://${VAR_masterDomain}"
+      REMOTE_MODEL_DIRECTORY: "${VAR_remoteModelDirectory}"
+      LOCAL_MODEL_DIRECTORY: "/data/local_saved_models"
+      TEMPORARY_MODEL_DOWNLOAD_DIRECTORY: "/data/tmp_downloads"
+      REMOTE_MODEL_PULL_FREQUENCY: 10800 # 3 hours
+      GOOGLE_CLOUD_PROJECT: ${VAR_googleCloudProject}
+      GOOGLE_APPLICATION_CREDENTIALS: "/google_cloud_credentials/${VAR_serviceAccountFile}"
+    deploy:
+      labels:
+        - maintainer.team=${VAR_teamName}
+      mode: global
+      placement: 
+       constraints:
+       - node.role == worker
+       - node.labels.type!=loggedoutrec
+       - node.labels.type!=loggedinrec
+      resources:
+        limits:
+          cpus: "1"
+          memory: "2G"
+        reservations:
+          cpus: "1"
+          memory: "500M"
+      restart_policy:
+        condition: "any"
+        delay: "30m"
+        window: "1h"
+      rollback_config:
+        parallelism: 0
+        delay: "0s"
+        monitor: "1h"
+      update_config:
+        parallelism: 0
+        delay: "0s"
+        monitor: "1h"
+
+  config_manager:
+    image: ${VAR_configManagerImage}
+    networks:
+      - hostnet
+    volumes:
+      - type: bind
+        source: ${VAR_hostDataDirectory}
+        target: /data/
+    environment:
+      HTTP_WORKERS: 3
+      HTTP_PORT: 8002
+      ENVIRONMENT: ${VAR_environment}
+      MASTER_URL: "https://${VAR_masterDomain}"
+      LOCAL_MODEL_DIRECTORY: "/data/local_saved_models"
+      TENSORFLOW_SERVING_CONFIG_FILE: "/data/serving_config/models.config"
+      TENSORFLOW_SERVING_GRPC_TARGET: "${VAR_swarmLocalHost}:8500"
+      CONFIG_UPDATE_FREQUENCY: 600 # 10 minutes
+    deploy:
+      labels:
+        - maintainer.team=${VAR_teamName}
+      mode: global
+      placement: 
+       constraints:
+       - node.role == worker
+       - node.labels.type!=loggedoutrec
+       - node.labels.type!=loggedinrec
+      resources:
+        limits:
+          cpus: "1"
+          memory: "2G"
+        reservations:
+          cpus: "1"
+          memory: "500M"
+      restart_policy:
+        condition: "any"
+        delay: "1m"
+        window: "20m"
+      rollback_config:
+        parallelism: 0
+        delay: "0s"
+        monitor: "1h"
+        order: "stop-first"
+      update_config:
+        parallelism: 0
+        delay: "0s"
+        monitor: "1h"
+        order: "stop-first"
+
+
+  tfserving:
+    image: ${VAR_tfservingImage}
+    networks:
+      - hostnet
+    volumes:
+      - type: bind
+        source: ${VAR_hostDataDirectory}
+        target: /data/
+    environment:
+      TENSORFLOW_SESSION_PARALLELISM: 20
+      NUM_LOAD_THREADS: 1
+      NUM_UNLOAD_THREADS: 1
+      TENSORFLOW_SERVING_CONFIG_FILE: "/data/serving_config/models.config"
+      TENSORFLOW_SERVING_HOST": "localhost"
+      TENSORFLOW_SERVING_GRPC_PORT: 8500
+      TENSORFLOW_SERVING_HTTP_PORT: 8501
+      LOCAL_MODEL_DIRECTORY: "/data/local_saved_models"
+      MODEL_CONFIG_FILE_POLL_WAIT: 300 # 5 minutes
+      FILE_SYSTEM_POLL_WAIT: 300 # 5 minutes
+    deploy:
+      labels:
+        - maintainer.team=${VAR_teamName}
+      mode: global
+      placement: 
+       constraints:
+       - node.role == worker
+       - node.labels.type!=loggedoutrec
+       - node.labels.type!=loggedinrec
+      resources:
+        limits:
+          cpus: "5"
+          memory: "12G"
+        reservations:
+          cpus: "5"
+          memory: "4G"
+      restart_policy:
+        condition: "any"
+        delay: "5s"
+        window: "5m"
+      rollback_config:
+        parallelism: 0
+        delay: "5s"
+        monitor: "5m"
+      update_config:
+        parallelism: 1
+        delay: "5m"
+        monitor: "15m"
+
+networks:
+  default:
+    external: false
+  proxy:
+    external: true
+  hostnet:
+    external: true
+    name: host
+
