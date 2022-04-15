@@ -1,0 +1,172 @@
+version: "3.9"
+
+services:
+
+  master:
+    env_file: ./.env
+    build:
+      context: .
+      dockerfile: ./master/Dockerfile
+      args:
+        userid: $DOCKER_USERID
+        username: $DOCKER_USERNAME
+    volumes:
+      - ./model_manager_lib:/model_manager_lib
+      - ./master/:/app/
+      - type: bind
+        source: $CLOUDSDK_CONFIG
+        target: /creds
+    ports:
+      - 8000:8000
+    environment:
+      HTTP_WORKERS: 10
+      HTTP_PORT: 8000
+      ENVIRONMENT: "test"
+      CLOUDSDK_CONFIG: "/creds"
+      GOOGLE_CLOUD_PROJECT: "icf-datascience-155505"
+      REMOTE_MODEL_DIRECTORY: "gs://atg-saved-models-test/$USER/$RUN_ID"
+
+  remote_model_puller:
+    env_file: ./.env
+    build:
+      context: .
+      dockerfile: ./remote_model_puller/Dockerfile
+      args:
+        userid: $DOCKER_USERID
+        username: $DOCKER_USERNAME
+    volumes:
+      - ./model_manager_lib:/model_manager_lib
+      - ./remote_model_puller/:/app/
+      - ./.container_shared_data:/data
+      - type: bind
+        source: $CLOUDSDK_CONFIG
+        target: /cloudsdk_config
+    ports:
+      - 8001:8001
+    environment:
+      HTTP_WORKERS: 3
+      HTTP_PORT: 8001
+      ENVIRONMENT: "test"
+      MASTER_URL: "http://master:8000"
+      REMOTE_MODEL_DIRECTORY: "gs://atg-saved-models-test/$USER/$RUN_ID"
+      LOCAL_MODEL_DIRECTORY: "/data/local_saved_models"
+      TEMPORARY_MODEL_DOWNLOAD_DIRECTORY: "/data/tmp_downloads"
+      REMOTE_MODEL_PULL_FREQUENCY: 0
+      CLOUDSDK_CONFIG: "/cloudsdk_config"
+      GOOGLE_CLOUD_PROJECT: "icf-datascience-155505"
+    depends_on:
+      - master
+
+  config_manager:
+    env_file: ./.env
+    build:
+      context: .
+      dockerfile: ./config_manager/Dockerfile
+      args:
+        userid: $DOCKER_USERID
+        username: $DOCKER_USERNAME
+    volumes:
+      - ./model_manager_lib:/model_manager_lib
+      - ./config_manager/:/app/
+      - ./.container_shared_data/:/data/
+    ports:
+      - 8002:8002
+    environment:
+      HTTP_WORKERS: 3
+      HTTP_PORT: 8002
+      ENVIRONMENT: "test"
+      MASTER_URL: "http://master:8000"
+      LOCAL_MODEL_DIRECTORY: "/data/local_saved_models"
+      TENSORFLOW_SERVING_CONFIG_FILE: "/data/serving_config/models.config"
+      TENSORFLOW_SERVING_GRPC_TARGET: "tfserving:8500"
+      CONFIG_UPDATE_FREQUENCY: 0
+    depends_on:
+      - tfserving
+      - master
+
+  tfserving:
+    env_file: ./.env
+    build:
+      context: .
+      dockerfile: ./tfserving/Dockerfile
+      args:
+        userid: $DOCKER_USERID
+        username: $DOCKER_USERNAME
+    volumes:
+      - ./tfserving/:/app
+      - ./model_manager_lib:/model_manager_lib
+      - ./.container_shared_data:/data
+    ports:
+      - 8501:8501
+      - 8500:8500
+    environment:
+      TF_CPP_VMODULE: "http_server=1"
+      TENSORFLOW_SESSION_PARALLELISM: 20
+      NUM_LOAD_THREADS: 1
+      NUM_UNLOAD_THREADS: 1
+      TENSORFLOW_SERVING_CONFIG_FILE: "/data/serving_config/models.config"
+      TENSORFLOW_SERVING_HOST": "tfserving"
+      TENSORFLOW_SERVING_GRPC_PORT: 8500
+      TENSORFLOW_SERVING_HTTP_PORT: 8501
+      LOCAL_MODEL_DIRECTORY: "/data/local_saved_models"
+      MODEL_CONFIG_FILE_POLL_WAIT: 1
+      FILE_SYSTEM_POLL_WAIT: 1
+
+  tests:
+    env_file: ./.env
+    profiles: ["only_runnable"]
+    build:
+      context: ./tests
+      args:
+        userid: $DOCKER_USERID
+        username: $DOCKER_USERNAME
+    environment:
+      env_file: .env
+      ENVIRONMENT: "test"
+      CLOUDSDK_CONFIG: "/cloudsdk_config"
+      GOOGLE_CLOUD_PROJECT: "icf-datascience-155505"
+      REMOTE_MODEL_DIRECTORY: "gs://atg-saved-models-test/$USER/$RUN_ID"
+      LOCAL_MODEL_DIRECTORY: "/data/local_saved_models"
+      TENSORFLOW_SERVING_CONFIG_FILE: "/data/serving_config/models.config"
+      TENSORFLOW_SERVING_GRPC_TARGET: "tfserving:8500"
+    volumes:
+    - ./tests:/app/
+    - ./.container_shared_data/:/data
+    - type: bind
+      source: $CLOUDSDK_CONFIG
+      target: /cloudsdk_config
+    depends_on:
+      - master
+      - remote_model_puller
+      - config_manager
+      - tfserving
+
+  fill_remote_directory_with_models:
+    env_file: ./.env
+    profiles: ["only_runnable"]
+    build:
+      context: ./tests
+      args:
+        userid: $DOCKER_USERID
+        username: $DOCKER_USERNAME
+    environment:
+      ENVIRONMENT: "test"
+      LOCAL_MODEL_DIRECTORY: "/data/local_saved_models"
+      TENSORFLOW_SERVING_CONFIG_FILE: "/data/serving_config/models.config"
+      TENSORFLOW_SERVING_GRPC_TARGET: "tfserving:8500"
+      CLOUDSDK_CONFIG: /cloudsdk_config
+      GCLOUD_PROJECT: "icf-datascience-155505"
+      REMOTE_MODEL_DIRECTORY: "gs://atg-saved-models-test/$USER/$RUN_ID"
+    volumes:
+      - ./tests:/app/
+      - ./.container_shared_data:/data
+      - type: bind
+        source: $CLOUDSDK_CONFIG
+        target: /cloudsdk_config
+    depends_on:
+      - master
+      - remote_model_puller
+      - config_manager
+      - tfserving
+    entrypoint: ["python3.8", "-Wignore", "manually_fill_up_remote_indices_with_simple_models.py"]
+
