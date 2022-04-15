@@ -15,10 +15,6 @@ This container should be deployed globally along with `config_manager` and `remo
 ### master
 Responsible of administrative operations to occur on the cluster. The `master` container keeps a list of registered `config_manager` and `remote_model_puller` nodes. It allows users to perform operations across the entire cluster, and to read/change remote model state as well.
 
-`master` is only run on one node of the cluster and  is available as recommendations-mlmodelmanager.{integ/staging//}.icfsys.com.
-
-The endpoints on master can be seen [here](https://recommendations-mlmodelmanager.integ.icfsys.com/docs#/).
-
 ### remote_manager
 Periodically this webservice tracks what models are available on a defined gcs bucket, then pulls the most recent/current models down to local file system. This local file system is shared with `config_manager`
 It is deployed globably in the cluster along with `config_manager` and `tfserving`. It is s only accessible within the cluster via port of 8001 to communicate with master.  The `master` container will call it to initiate admin calls.
