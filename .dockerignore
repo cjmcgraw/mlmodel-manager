@@ -1,0 +1,8 @@
+**/.virtualenv/
+**/.venv/
+**/__pycache__/
+**/*.egg.info/
+**/.pyest_cache/
+local_saved_models/
+serving_config/
+.env
