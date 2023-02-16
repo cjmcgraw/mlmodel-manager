@@ -61,5 +61,5 @@ urllib3==1.25.9
 uvicorn==0.15.0
 uvloop==0.16.0
 websocket-client==0.57.0
-Werkzeug==2.0.1
+Werkzeug==2.2.3
 wrapt==1.12.1
